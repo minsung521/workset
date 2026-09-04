@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workset — Popup Validation</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    max-width: 480px;
+    margin: 60px auto;
+    padding: 0 16px;
+    text-align: center;
+  }
+  button {
+    font-size: 24px;
+    padding: 16px 48px;
+    cursor: pointer;
+  }
+  #log {
+    margin-top: 24px;
+    text-align: left;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  #log a {
+    margin-left: 8px;
+  }
+  p.hint {
+    color: #666;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+  <h1>Workset</h1>
+  <p class="hint">버튼을 클릭하거나, 이 문서 위에서 엔터를 누르세요.</p>
+  <button id="enterBtn">ENTER</button>
+  <div id="log"></div>
+
+<script>
+  var APPS = [
+    { name: "Claude", url: "https://claude.ai" },
+    { name: "ChatGPT", url: "https://chatgpt.com" },
+    { name: "Linear", url: "https://linear.app" }
+  ];
+
+  function log(line) {
+    var el = document.getElementById("log");
+    el.appendChild(line);
+  }
+
+  function launchApps() {
+    document.getElementById("log").innerHTML = "";
+    for (var i = 0; i < APPS.length; i++) {
+      var app = APPS[i];
+      var win = window.open(app.url, "_blank");
+      var row = document.createElement("div");
+      if (win) {
+        row.textContent = "✅ " + app.name + " 열림";
+      } else {
+        row.textContent = "❌ " + app.name + " 차단됨";
+        var a = document.createElement("a");
+        a.href = app.url;
+        a.target = "_blank";
+        a.textContent = "직접 열기";
+        row.appendChild(a);
+      }
+      log(row);
+    }
+  }
+
+  document.getElementById("enterBtn").addEventListener("click", launchApps);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      launchApps();
+    }
+  });
+</script>
+</body>
+</html>
