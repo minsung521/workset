@@ -3,82 +3,334 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Workset — Popup Validation</title>
+<title>Workset</title>
 <style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1d23;
+    --muted: #8b93a1;
+    --line: #e2e5ea;
+    --mark: #3d6ae0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171c;
+      --fg: #e6e8ec;
+      --muted: #767e8c;
+      --line: #2a2e36;
+      --mark: #7fa0ff;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
   body {
-    font-family: system-ui, sans-serif;
-    max-width: 480px;
-    margin: 60px auto;
-    padding: 0 16px;
+    margin: 0;
+    min-height: 100vh;
+    padding: 18vh 24px 40px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  .wrap { max-width: 320px; margin: 0 auto; }
+
+  ol {
+    list-style: none;
+    margin: 0 0 44px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  li { display: flex; align-items: baseline; gap: 12px; }
+
+  .marker {
+    width: 14px;
+    flex: none;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--mark);
     text-align: center;
   }
-  button {
-    font-size: 24px;
-    padding: 16px 48px;
-    cursor: pointer;
+  li.done .marker { color: var(--muted); }
+
+  a {
+    flex: 1;
+    display: block;
+    padding: 9px 10px;
+    margin-left: -10px;
+    border-radius: 5px;
+    color: var(--fg);
+    font-size: 17px;
+    line-height: 1.4;
+    text-decoration: none;
   }
-  #log {
-    margin-top: 24px;
-    text-align: left;
-    font-family: monospace;
-    font-size: 14px;
-    line-height: 1.6;
+  a:focus { outline: none; }
+  li.current a { background: var(--line); }
+  li.done a { color: var(--muted); }
+
+  /* ---- 하단 안내 = 키캡 ---- */
+  .hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
   }
-  #log a {
-    margin-left: 8px;
+
+  .cap {
+    display: inline-block;
+    padding: 4px 9px;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.3;
+    user-select: none;
   }
-  p.hint {
-    color: #666;
-    font-size: 14px;
+  .cap.pressed {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+    border-bottom-width: 1px;
+    transform: translateY(1px);
+  }
+  .cap[hidden], .plus[hidden] { display: none; }
+  .plus { font-size: 12px; color: var(--muted); }
+
+  @keyframes cap-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    50% { transform: translateX(4px); }
+    75% { transform: translateX(-2px); }
+  }
+  .cap.shake { animation: cap-shake 0.25s ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .cap.shake { animation: none; border-color: var(--mark); color: var(--mark); }
   }
 </style>
 </head>
 <body>
-  <h1>Workset</h1>
-  <p class="hint">버튼을 클릭하거나, 이 문서 위에서 엔터를 누르세요.</p>
-  <button id="enterBtn">ENTER</button>
-  <div id="log"></div>
+<div class="wrap">
+  <ol id="apps"></ol>
+  <div class="hint">
+    <span class="cap" id="cap-mod">Ctrl</span>
+    <span class="plus" id="plus">+</span>
+    <span class="cap" id="cap-enter">Enter</span>
+    <span id="hint-text">로 계속</span>
+  </div>
+</div>
 
 <script>
+(function () {
+  "use strict";
+
   var APPS = [
     { name: "Claude", url: "https://claude.ai" },
     { name: "ChatGPT", url: "https://chatgpt.com" },
     { name: "Linear", url: "https://linear.app" }
   ];
 
-  function log(line) {
-    var el = document.getElementById("log");
-    el.appendChild(line);
+  var LAST = APPS.length - 1;
+  var IS_MAC = /Mac|iPod|iPhone|iPad/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent);
+  var MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
+  var STORE_KEY = "workset-progress";
+
+  var listEl = document.getElementById("apps");
+  var capMod = document.getElementById("cap-mod");
+  var capEnter = document.getElementById("cap-enter");
+  var plusEl = document.getElementById("plus");
+  var hintText = document.getElementById("hint-text");
+
+  var links = [];
+  var done = APPS.map(function () { return false; });
+  var current = 0;
+
+  capMod.textContent = MOD_LABEL;
+
+  /* ---------- 진행 상태 (sessionStorage — 저장 실패해도 동작에 영향 없음) ---------- */
+
+  function save() {
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(done)); } catch (err) {}
   }
 
-  function launchApps() {
-    document.getElementById("log").innerHTML = "";
-    for (var i = 0; i < APPS.length; i++) {
-      var app = APPS[i];
-      var win = window.open(app.url, "_blank");
-      var row = document.createElement("div");
-      if (win) {
-        row.textContent = "✅ " + app.name + " 열림";
-      } else {
-        row.textContent = "❌ " + app.name + " 차단됨";
-        var a = document.createElement("a");
-        a.href = app.url;
-        a.target = "_blank";
-        a.textContent = "직접 열기";
-        row.appendChild(a);
+  function clearSaved() {
+    try { sessionStorage.removeItem(STORE_KEY); } catch (err) {}
+  }
+
+  function restore() {
+    var raw = null;
+    try { raw = sessionStorage.getItem(STORE_KEY); } catch (err) { return; }
+    if (!raw) return;
+
+    var saved;
+    try { saved = JSON.parse(raw); } catch (err) { return; }
+    if (!Array.isArray(saved) || saved.length !== APPS.length) return;
+
+    // 전부 연 상태로 돌아왔으면 새로 시작한다 — 다 채워진 화면은 할 일이 없다.
+    if (saved.every(Boolean)) { clearSaved(); return; }
+    done = saved.map(Boolean);
+  }
+
+  function reset() {
+    done = APPS.map(function () { return false; });
+    clearSaved();
+  }
+
+  /* ---------- 렌더 ---------- */
+
+  APPS.forEach(function (app, i) {
+    var li = document.createElement("li");
+
+    var marker = document.createElement("span");
+    marker.className = "marker";
+
+    var a = document.createElement("a");
+    a.href = app.url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = app.name;
+
+    a.addEventListener("click", function (e) {
+      if (i === LAST) {
+        // 배경 탭으로 열면 런처가 전경에 남는다. 현재 탭 이동은 팝업이 아니라 차단되지 않는다.
+        e.preventDefault();
+        done[i] = true;
+        save();
+        location.href = app.url;
+        return;
       }
-      log(row);
-    }
+      // 마지막이 아닌 항목은 네이티브 동작(배경 탭)을 그대로 통과시킨다 — preventDefault 금지.
+      done[i] = true;
+      save();
+      focusLink(nextPending(i + 1));
+    });
+
+    a.addEventListener("focus", function () { current = i; render(); });
+
+    li.appendChild(marker);
+    li.appendChild(a);
+    listEl.appendChild(li);
+    links.push(a);
+  });
+
+  function render() {
+    links.forEach(function (a, i) {
+      var li = a.parentNode;
+      var isCurrent = i === current;
+      li.classList.toggle("done", done[i]);
+      li.classList.toggle("current", isCurrent && !done[i]);
+      li.querySelector(".marker").textContent = done[i] ? "✓" : (isCurrent ? "▶" : "");
+    });
+
+    // 마지막 항목 차례에는 키캡이 Enter 하나로 바뀐다 — 이 전환이 "이제 마지막"이라는 신호다.
+    var finishing = current === LAST;
+    capMod.hidden = finishing;
+    plusEl.hidden = finishing;
+    hintText.textContent = finishing ? "로 마무리" : "로 계속";
   }
 
-  document.getElementById("enterBtn").addEventListener("click", launchApps);
+  function nextPending(from) {
+    var i;
+    for (i = from; i < APPS.length; i++) { if (!done[i]) return i; }
+    for (i = 0; i < APPS.length; i++) { if (!done[i]) return i; }
+    return LAST;
+  }
+
+  function focusLink(i) {
+    if (links[i]) links[i].focus();
+  }
+
+  /* ---------- 키 입력 ---------- */
+
+  function setPressed(cap, on) { cap.classList.toggle("pressed", on); }
+
+  function shakeMod() {
+    capMod.classList.remove("shake");
+    void capMod.offsetWidth; // 애니메이션 재시작용 리플로
+    capMod.classList.add("shake");
+    setTimeout(function () { capMod.classList.remove("shake"); }, 300);
+  }
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      launchApps();
-    }
-  });
+    // D2. IME 가드 — 한글 조합 중에는 Enter를 IME가 확정용으로 가져간다.
+    if (e.isComposing || e.keyCode === 229) return;
+    // D1. 키 리피트 가드 — 누르고 있는 동안 반복 발생하는 keydown을 무시한다.
+    if (e.repeat) return;
+
+    if (e.key === "Control" || e.key === "Meta") { setPressed(capMod, true); return; }
+    if (e.key !== "Enter") return;
+
+    setPressed(capEnter, true);
+
+    // Ctrl+Enter에는 절대 preventDefault를 걸지 않는다 — 걸면 링크가 열리지 않는다.
+    if (e.ctrlKey || e.metaKey) return;
+
+    var ae = document.activeElement;
+    var idx = links.indexOf(ae);
+    if (idx === LAST) return; // 마지막 항목은 단독 Enter로 마무리한다
+
+    // 다른 컨트롤에 포커스가 있으면 그쪽 키보드 조작을 방해하지 않는다.
+    var onPage = !ae || ae === document.body || ae === document.documentElement;
+    if (idx === -1 && !onPage) return;
+
+    e.preventDefault();
+    shakeMod();
+  }, false);
+
+  document.addEventListener("keyup", function (e) {
+    if (e.key === "Control" || e.key === "Meta") setPressed(capMod, false);
+    if (e.key === "Enter") setPressed(capEnter, false);
+  }, false);
+
+  /* ---------- 포커스 유지 ---------- */
+  /* 링크에서 포커스가 빠지면 Ctrl+Enter가 먹통이 된다. 항상 현재 항목으로 되돌린다. */
+
+  document.addEventListener("focusout", function () {
+    setTimeout(function () {
+      var ae = document.activeElement;
+      if (links.indexOf(ae) !== -1) return;
+      if (ae && ae !== document.body && ae !== document.documentElement) return;
+      if (!document.hasFocus()) return;
+      focusLink(current);
+    }, 0);
+  }, false);
+
+  window.addEventListener("blur", function () {
+    setPressed(capMod, false);
+    setPressed(capEnter, false);
+  }, false);
+
+  window.addEventListener("focus", function () {
+    if (links.indexOf(document.activeElement) === -1) focusLink(current);
+  }, false);
+
+  window.addEventListener("pagehide", save, false);
+
+  // 뒤로 가기로 되살아난 경우(bfcache)도 새로 연 것과 같게 맞춘다.
+  window.addEventListener("pageshow", function (e) {
+    if (!e.persisted) return;
+    if (done.every(Boolean)) reset();
+    start();
+  }, false);
+
+  /* ---------- 시작 ---------- */
+
+  function start() {
+    current = nextPending(0);
+    render();
+    focusLink(current);
+  }
+
+  restore();
+  start();
+})();
 </script>
 </body>
 </html>
