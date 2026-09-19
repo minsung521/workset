@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workset Phase 0.5 — 런치 시퀀스 검증</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #16181d;
+    --muted: #697080;
+    --line: #d9dde4;
+    --accent: #2f5fe0;
+    --ok: #1a7f4b;
+    --warn: #b23c3c;
+    --panel: #f6f7f9;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 32px 20px 64px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.55;
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 36px 0 12px;
+  }
+  .hint { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+  .warn-note { color: var(--warn); font-size: 13px; margin: 0 0 24px; }
+
+  /* ---- 앱 링크 ---- */
+  ol.apps { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  ol.apps li { display: flex; align-items: center; gap: 10px; }
+  .status { width: 20px; text-align: center; font-size: 15px; color: var(--line); }
+  li.done .status { color: var(--ok); }
+
+  a.app {
+    flex: 1;
+    display: block;
+    padding: 11px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--fg);
+    text-decoration: none;
+    font-size: 15px;
+  }
+  a.app:focus { outline: 3px solid var(--accent); outline-offset: 1px; }
+  a.app .url { display: block; font-size: 12px; color: var(--muted); }
+  li.done a.app { border-style: dashed; color: var(--muted); }
+  .tail { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+  /* ---- 키캡 ---- */
+  .keycaps { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .cap {
+    display: inline-block;
+    min-width: 58px;
+    padding: 9px 12px;
+    text-align: center;
+    border: 1px solid var(--line);
+    border-bottom-width: 3px;
+    border-radius: 6px;
+    background: #fff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+    user-select: none;
+  }
+  .cap.pressed {
+    background: var(--fg);
+    color: #fff;
+    border-color: var(--fg);
+    border-bottom-width: 1px;
+    transform: translateY(2px);
+  }
+  @keyframes cap-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+  .cap.shake { animation: cap-shake 0.3s ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .cap.shake { animation: none; border-color: var(--warn); color: var(--warn); }
+  }
+
+  /* ---- 검증 패널 ---- */
+  table.checks { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.checks th, table.checks td {
+    text-align: left;
+    padding: 8px 8px 8px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.checks th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+  table.checks td.id { font-family: ui-monospace, monospace; font-weight: 600; width: 34px; }
+  table.checks td.verdict { width: 130px; white-space: nowrap; }
+  table.checks label { margin-right: 10px; cursor: pointer; }
+
+  pre.log {
+    margin: 0;
+    padding: 12px 14px;
+    max-height: 260px;
+    overflow: auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  button {
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--fg);
+    font-size: 13.5px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .copied { font-size: 13px; color: var(--ok); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Phase 0.5 — 런치 시퀀스 검증</h1>
+  <p class="hint">
+    포커스된 링크에서 <strong><span class="mod-label">Ctrl</span>+Enter</strong> 또는
+    <strong><span class="mod-label">Ctrl</span>+클릭</strong>으로 하나씩 실행합니다.
+    마지막 항목은 현재 탭을 대체합니다.
+  </p>
+  <p class="warn-note">마지막 항목을 실행하면 이 페이지를 떠납니다. 로그는 그 전에 복사해 두세요.</p>
+
+  <ol class="apps" id="apps"></ol>
+
+  <h2>키 입력</h2>
+  <div class="keycaps">
+    <span class="cap" id="cap-mod">Ctrl</span>
+    <span class="cap" id="cap-enter">Enter</span>
+    <span class="hint" style="margin:0">단독 Enter는 마지막 항목을 제외하고 차단됩니다.</span>
+  </div>
+
+  <h2>가정 검증 (수동 체크)</h2>
+  <table class="checks">
+    <thead>
+      <tr><th>#</th><th>가정</th><th>판정</th></tr>
+    </thead>
+    <tbody id="checks"></tbody>
+  </table>
+
+  <h2>자동 계측 로그</h2>
+  <pre class="log" id="log"></pre>
+  <div class="row">
+    <button type="button" id="copy">결과 복사</button>
+    <button type="button" id="clear">로그 지우기</button>
+    <span class="copied" id="copied" hidden>복사됨</span>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var APPS = [
+    { name: "Claude", url: "https://claude.ai" },
+    { name: "ChatGPT", url: "https://chatgpt.com" },
+    { name: "Linear", url: "https://linear.app" }
+  ];
+
+  var ASSUMPTIONS = [
+    { id: "A1", text: "Ctrl+클릭으로 연 링크는 팝업 차단을 받지 않는다" },
+    { id: "A2", text: "Ctrl+클릭 시 포커스가 현재 페이지에 남는다" },
+    { id: "A3", text: "링크에 포커스를 둔 상태의 Ctrl+Enter가 Ctrl+클릭과 동일하게 동작한다" },
+    { id: "A4", text: "스크립트로 다음 링크에 포커스를 옮겨도 A3가 계속 유효하다" },
+    { id: "A5", text: "사지방 Chrome에서 A1~A4가 동일하게 동작한다" }
+  ];
+
+  var LAST = APPS.length - 1;
+  var IS_MAC = /Mac|iPod|iPhone|iPad/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent);
+  var MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
+  var STORE_KEY = "workset-phase05";
+
+  var links = [];
+  var logLines = [];
+
+  var logEl = document.getElementById("log");
+  var capMod = document.getElementById("cap-mod");
+  var capEnter = document.getElementById("cap-enter");
+
+  /* ---------- 로그 ---------- */
+
+  function log(kind, text) {
+    var t = Math.round(performance.now());
+    logLines.push("[" + t + "ms] " + kind + " — " + text);
+    renderLog();
+  }
+
+  function renderLog() {
+    logEl.textContent = logLines.join("\n");
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  /* ---------- 앱 링크 렌더 ---------- */
+
+  var listEl = document.getElementById("apps");
+
+  APPS.forEach(function (app, i) {
+    var li = document.createElement("li");
+
+    var status = document.createElement("span");
+    status.className = "status";
+    status.textContent = "○";
+
+    var a = document.createElement("a");
+    a.className = "app";
+    a.href = app.url;
+    a.target = "_blank";
+    a.rel = "noopener";
+
+    var nameEl = document.createElement("strong");
+    nameEl.textContent = app.name;
+    var urlEl = document.createElement("span");
+    urlEl.className = "url";
+    urlEl.textContent = app.url;
+    a.appendChild(nameEl);
+    a.appendChild(urlEl);
+
+    var tail = document.createElement("span");
+    tail.className = "tail";
+    tail.textContent = i === LAST ? "현재 탭 이동" : "배경 탭";
+
+    a.addEventListener("click", function (e) {
+      if (i === LAST) {
+        // 배경 탭으로 열면 이 페이지가 전경에 남는데 스크립트로는 닫을 수 없다.
+        // 현재 탭 이동은 팝업이 아니므로 차단되지 않는다.
+        e.preventDefault();
+        markDone(i);
+        log("nav", app.name + " — 현재 탭 이동 (location.href)");
+        location.href = app.url;
+        return;
+      }
+      // 마지막이 아닌 항목은 네이티브 동작을 그대로 통과시킨다. preventDefault 금지.
+      markDone(i);
+      focusLink(i + 1);
+    });
+
+    a.addEventListener("focus", function () {
+      log("focus", app.name + " 링크에 포커스" + (i === LAST ? " (마지막 — 단독 Enter 허용)" : ""));
+    });
+
+    li.appendChild(status);
+    li.appendChild(a);
+    li.appendChild(tail);
+    listEl.appendChild(li);
+    links.push(a);
+  });
+
+  function markDone(i) {
+    var li = links[i].parentNode;
+    if (li.classList.contains("done")) return;
+    li.classList.add("done");
+    li.querySelector(".status").textContent = "✓";
+  }
+
+  function focusLink(i) {
+    if (!links[i]) return;
+    links[i].focus();
+  }
+
+  /* ---------- 키캡 ---------- */
+
+  document.querySelectorAll(".mod-label").forEach(function (el) { el.textContent = MOD_LABEL; });
+  capMod.textContent = MOD_LABEL;
+
+  function setPressed(cap, on) { cap.classList.toggle("pressed", on); }
+
+  function shakeMod() {
+    capMod.classList.remove("shake");
+    void capMod.offsetWidth; // 애니메이션 재시작용 리플로
+    capMod.classList.add("shake");
+    setTimeout(function () { capMod.classList.remove("shake"); }, 350);
+  }
+
+  /* ---------- 단독 Enter 차단 ---------- */
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Control" || e.key === "Meta") setPressed(capMod, true);
+    if (e.key !== "Enter") return;
+
+    setPressed(capEnter, true);
+
+    // Ctrl+Enter에는 절대 preventDefault를 걸지 않는다 — 걸면 링크가 열리지 않는다.
+    if (e.ctrlKey || e.metaKey) return;
+
+    var ae = document.activeElement;
+    var idx = links.indexOf(ae);
+    if (idx === LAST) return; // 마지막 항목은 단독 Enter도 허용
+
+    // 버튼/라디오 같은 다른 컨트롤의 키보드 조작은 방해하지 않는다.
+    var onPage = !ae || ae === document.body || ae === document.documentElement;
+    if (idx === -1 && !onPage) return;
+
+    e.preventDefault();
+    shakeMod();
+  }, false);
+
+  document.addEventListener("keyup", function (e) {
+    if (e.key === "Control" || e.key === "Meta") setPressed(capMod, false);
+    if (e.key === "Enter") setPressed(capEnter, false);
+  }, false);
+
+  /* ---------- 자동 계측 ---------- */
+  /* window 버블 단계에서 기록해야 defaultPrevented가 최종값으로 잡힌다. */
+
+  window.addEventListener("keydown", function (e) {
+    log("keydown", "key=" + e.key + " ctrl=" + e.ctrlKey + " meta=" + e.metaKey +
+        " prevented=" + e.defaultPrevented);
+  }, false);
+
+  window.addEventListener("click", function (e) {
+    var a = e.target && e.target.closest ? e.target.closest("a.app") : null;
+    if (!a) return;
+    var name = APPS[links.indexOf(a)].name;
+    log("click", name + " ctrl=" + e.ctrlKey + " meta=" + e.metaKey +
+        " prevented=" + e.defaultPrevented);
+  }, false);
+
+  window.addEventListener("blur", function () {
+    log("window", "blur — 포커스가 이 페이지를 떠남");
+    setPressed(capMod, false);
+    setPressed(capEnter, false);
+  }, false);
+
+  window.addEventListener("focus", function () {
+    log("window", "focus — 포커스가 이 페이지로 돌아옴");
+  }, false);
+
+  /* ---------- 수동 체크 ---------- */
+
+  var checksEl = document.getElementById("checks");
+
+  ASSUMPTIONS.forEach(function (as) {
+    var tr = document.createElement("tr");
+
+    var idTd = document.createElement("td");
+    idTd.className = "id";
+    idTd.textContent = as.id;
+
+    var textTd = document.createElement("td");
+    textTd.textContent = as.text;
+
+    var verdictTd = document.createElement("td");
+    verdictTd.className = "verdict";
+    ["PASS", "FAIL"].forEach(function (v) {
+      var label = document.createElement("label");
+      var input = document.createElement("input");
+      input.type = "radio";
+      input.name = as.id;
+      input.value = v;
+      input.addEventListener("change", function () {
+        log("check", as.id + " = " + v);
+        save();
+      });
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(" " + v));
+      verdictTd.appendChild(label);
+    });
+
+    tr.appendChild(idTd);
+    tr.appendChild(textTd);
+    tr.appendChild(verdictTd);
+    checksEl.appendChild(tr);
+  });
+
+  function readChecks() {
+    var out = {};
+    ASSUMPTIONS.forEach(function (as) {
+      var sel = document.querySelector('input[name="' + as.id + '"]:checked');
+      out[as.id] = sel ? sel.value : null;
+    });
+    return out;
+  }
+
+  /* ---------- 결과 복사 ---------- */
+
+  function buildReport() {
+    var checks = readChecks();
+    var out = [];
+    out.push("## Workset Phase 0.5 검증 결과");
+    out.push("");
+    out.push("- 일시: " + new Date().toISOString());
+    out.push("- 수식어 키: " + (IS_MAC ? "Cmd (macOS)" : "Ctrl"));
+    out.push("- User-Agent: " + navigator.userAgent);
+    out.push("");
+    out.push("### 가정 판정");
+    ASSUMPTIONS.forEach(function (as) {
+      out.push("- [" + (checks[as.id] === "PASS" ? "x" : " ") + "] " +
+               as.id + " " + as.text + " — " + (checks[as.id] || "미기록"));
+    });
+    out.push("");
+    out.push("### 자동 계측 로그");
+    out.push("```");
+    out = out.concat(logLines.length ? logLines : ["(기록 없음)"]);
+    out.push("```");
+    return out.join("\n");
+  }
+
+  var copiedEl = document.getElementById("copied");
+
+  function flashCopied(text) {
+    copiedEl.textContent = text;
+    copiedEl.hidden = false;
+    setTimeout(function () { copiedEl.hidden = true; }, 2000);
+  }
+
+  document.getElementById("copy").addEventListener("click", function () {
+    var text = buildReport();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        flashCopied("복사됨");
+      }, function () {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  });
+
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (err) { ok = false; }
+    document.body.removeChild(ta);
+    flashCopied(ok ? "복사됨" : "복사 실패 — 로그를 직접 선택해 주세요");
+  }
+
+  document.getElementById("clear").addEventListener("click", function () {
+    logLines = [];
+    renderLog();
+    save();
+  });
+
+  /* ---------- 세션 보존 ---------- */
+  /* 마지막 항목 실행으로 페이지를 떠나도 로그가 남도록 한다. */
+
+  function save() {
+    try {
+      sessionStorage.setItem(STORE_KEY, JSON.stringify({ log: logLines, checks: readChecks() }));
+    } catch (err) { /* 저장 불가 환경은 무시 */ }
+  }
+
+  function restore() {
+    var raw = null;
+    try { raw = sessionStorage.getItem(STORE_KEY); } catch (err) { return; }
+    if (!raw) return;
+    var data;
+    try { data = JSON.parse(raw); } catch (err) { return; }
+
+    if (data.log && data.log.length) {
+      logLines = data.log.concat(["— 이전 세션 로그 복원됨 —"]);
+      renderLog();
+    }
+    if (data.checks) {
+      Object.keys(data.checks).forEach(function (id) {
+        if (!data.checks[id]) return;
+        var input = document.querySelector('input[name="' + id + '"][value="' + data.checks[id] + '"]');
+        if (input) input.checked = true;
+      });
+    }
+  }
+
+  window.addEventListener("pagehide", save, false);
+
+  /* ---------- 시작 ---------- */
+
+  restore();
+  log("init", "페이지 로드 — 수식어 키: " + MOD_LABEL);
+  focusLink(0);
+})();
+</script>
+</body>
+</html>
