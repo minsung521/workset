@@ -4,6 +4,69 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Workset</title>
+<!-- ---- analytics (GA4 + PostHog) ----
+     운영 도메인(workset.my)에서만 로드한다. localhost·file://·Netlify 미리보기에서는 아무것도 로드하지 않는다.
+     키가 비어 있거나 로드에 실패해도 런처 동작에는 영향이 없어야 한다 (모든 호출은 try/catch). -->
+<script>
+(function () {
+  "use strict";
+
+  // 두 값 모두 브라우저에 노출되는 공개 식별자라 저장소에 커밋해도 된다 (시크릿 아님).
+  var POSTHOG_KEY = "phc_Bv5AMLBBPJhoeniaa28Ew4Xh7FvEDjhJgnShPikQGWhe"; // phc_... (PostHog > Project settings > Project token)
+  var POSTHOG_HOST = "https://us.i.posthog.com";      // EU 리전이면 https://eu.i.posthog.com
+  var GA4_ID = "G-LNX7M4ELMM";                         // G-... (GA4 > 관리 > 데이터 스트림)
+
+  var enabled = /(^|\.)workset\.my$/.test(location.hostname);
+  var usePH = enabled && /^phc_/.test(POSTHOG_KEY);
+  var useGA = enabled && /^G-/.test(GA4_ID);
+
+  if (usePH) {
+    try {
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],Object.defineProperty(u,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e}}),Object.defineProperty(u.people,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(){return u.toString(1)+".people (stub)"}}),o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      window.posthog.init(POSTHOG_KEY, {
+        api_host: POSTHOG_HOST,
+        defaults: "2026-05-30",
+        // autocapture는 링크 href를 attr__href·$elements_chain으로 싣고 이 값은 속성 무시목록을 우회한다.
+        // 런치 이벤트는 아래에서 직접 보내므로 끄는 쪽이 중복도 없고 주소 유출 여지도 없다.
+        autocapture: false,
+        // 설문 팝업이 포커스를 가져가면 Ctrl+Enter가 먹통이 된다 — 런처에는 띄우지 않는다.
+        disable_surveys: true
+      });
+    } catch (err) { usePH = false; }
+  }
+
+  if (useGA) {
+    try {
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag("js", new Date());
+      window.gtag("config", GA4_ID);
+      var s = document.createElement("script");
+      s.async = true;
+      s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA4_ID;
+      document.head.appendChild(s);
+    } catch (err) { useGA = false; }
+  }
+
+  // 런처 코드가 부르는 단일 진입점. beacon=true는 직후에 페이지를 떠나는 경우(마지막 항목)에 쓴다.
+  window.wsTrack = function (name, props, beacon) {
+    props = props || {};
+    if (usePH) {
+      try {
+        window.posthog.capture(name, props, beacon ? { send_instantly: true, transport: "sendBeacon" } : undefined);
+      } catch (err) {}
+    }
+    if (useGA) {
+      try {
+        var p = {};
+        for (var k in props) { if (Object.prototype.hasOwnProperty.call(props, k)) p[k] = props[k]; }
+        if (beacon) p.transport_type = "beacon";
+        window.gtag("event", name, p);
+      } catch (err) {}
+    }
+  };
+})();
+</script>
 <style>
   :root {
     --bg: #ffffff;
@@ -151,6 +214,21 @@
   var links = [];
   var done = APPS.map(function () { return false; });
   var current = 0;
+  var resumed = false;             // sessionStorage에서 진행 상태를 복원해 이어서 시작했는지
+  var startedAt = Date.now();
+
+  /* ---------- 계측 (analytics가 없거나 실패해도 동작에 영향 없음) ---------- */
+
+  function track(name, props, beacon) {
+    try { if (window.wsTrack) window.wsTrack(name, props, beacon); } catch (err) {}
+  }
+
+  // 키보드로 활성화된 click은 detail이 0이다. Ctrl/⌘ 동반 여부로 네 가지로 나눈다.
+  function openMethod(e) {
+    var mod = e.ctrlKey || e.metaKey;
+    if (e.detail === 0) return mod ? "mod_enter" : "enter";
+    return mod ? "mod_click" : "click";
+  }
 
   capMod.textContent = MOD_LABEL;
 
@@ -176,6 +254,7 @@
     // 전부 연 상태로 돌아왔으면 새로 시작한다 — 다 채워진 화면은 할 일이 없다.
     if (saved.every(Boolean)) { clearSaved(); return; }
     done = saved.map(Boolean);
+    resumed = done.some(Boolean);
   }
 
   function reset() {
@@ -198,11 +277,29 @@
     a.textContent = app.name;
 
     a.addEventListener("click", function (e) {
-      if (i === LAST) {
+      var isLast = i === LAST;
+      track("launch_item_opened", {
+        position: i + 1,
+        total: APPS.length,
+        is_last: isLast,
+        method: openMethod(e),
+        app_name: app.name,
+        resumed: resumed
+      }, isLast);
+
+      if (isLast) {
         // 배경 탭으로 열면 런처가 전경에 남는다. 현재 탭 이동은 팝업이 아니라 차단되지 않는다.
         e.preventDefault();
         done[i] = true;
         save();
+        // 이동 직전이라 beacon으로 보낸다. 이동을 늦추지 않는다.
+        track("launch_sequence_finished", {
+          total: APPS.length,
+          opened_count: done.filter(Boolean).length,
+          all_opened: done.every(Boolean),
+          elapsed_ms: Date.now() - startedAt,
+          resumed: resumed
+        }, true);
         location.href = app.url;
         return;
       }
@@ -282,6 +379,8 @@
 
     e.preventDefault();
     shakeMod();
+    // 단독 Enter 차단 = 조작법을 아직 몸에 익히지 못했다는 신호 (MIN-58 "학습 완료" 기준 보조 지표).
+    track("bare_enter_blocked", { position: current + 1, total: APPS.length });
   }, false);
 
   document.addEventListener("keyup", function (e) {
@@ -317,6 +416,8 @@
   window.addEventListener("pageshow", function (e) {
     if (!e.persisted) return;
     if (done.every(Boolean)) reset();
+    resumed = done.some(Boolean);
+    startedAt = Date.now();
     start();
   }, false);
 
