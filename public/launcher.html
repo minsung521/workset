@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workset</title>
+<!-- ---- analytics (GA4 + PostHog) ----
+     운영 도메인(workset.my)에서만 로드한다. localhost·file://·Netlify 미리보기에서는 아무것도 로드하지 않는다.
+     키가 비어 있거나 로드에 실패해도 런처 동작에는 영향이 없어야 한다 (모든 호출은 try/catch). -->
+<script>
+(function () {
+  "use strict";
+
+  // 두 값 모두 브라우저에 노출되는 공개 식별자라 저장소에 커밋해도 된다 (시크릿 아님).
+  var POSTHOG_KEY = "phc_Bv5AMLBBPJhoeniaa28Ew4Xh7FvEDjhJgnShPikQGWhe"; // phc_... (PostHog > Project settings > Project token)
+  var POSTHOG_HOST = "https://us.i.posthog.com";      // EU 리전이면 https://eu.i.posthog.com
+  var GA4_ID = "G-LNX7M4ELMM";                         // G-... (GA4 > 관리 > 데이터 스트림)
+
+  var enabled = /(^|\.)workset\.my$/.test(location.hostname);
+  var usePH = enabled && /^phc_/.test(POSTHOG_KEY);
+  var useGA = enabled && /^G-/.test(GA4_ID);
+
+  if (usePH) {
+    try {
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],Object.defineProperty(u,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e}}),Object.defineProperty(u.people,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(){return u.toString(1)+".people (stub)"}}),o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      window.posthog.init(POSTHOG_KEY, {
+        api_host: POSTHOG_HOST,
+        defaults: "2026-05-30",
+        // autocapture는 링크 href를 attr__href·$elements_chain으로 싣고 이 값은 속성 무시목록을 우회한다.
+        // 런치 이벤트는 아래에서 직접 보내므로 끄는 쪽이 중복도 없고 주소 유출 여지도 없다.
+        autocapture: false,
+        // 설문 팝업이 포커스를 가져가면 Ctrl+Enter가 먹통이 된다 — 런처에는 띄우지 않는다.
+        disable_surveys: true
+      });
+    } catch (err) { usePH = false; }
+  }
+
+  if (useGA) {
+    try {
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag("js", new Date());
+      window.gtag("config", GA4_ID);
+      var s = document.createElement("script");
+      s.async = true;
+      s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA4_ID;
+      document.head.appendChild(s);
+    } catch (err) { useGA = false; }
+  }
+
+  // 런처 코드가 부르는 단일 진입점. beacon=true는 직후에 페이지를 떠나는 경우(마지막 항목)에 쓴다.
+  window.wsTrack = function (name, props, beacon) {
+    props = props || {};
+    if (usePH) {
+      try {
+        window.posthog.capture(name, props, beacon ? { send_instantly: true, transport: "sendBeacon" } : undefined);
+      } catch (err) {}
+    }
+    if (useGA) {
+      try {
+        var p = {};
+        for (var k in props) { if (Object.prototype.hasOwnProperty.call(props, k)) p[k] = props[k]; }
+        if (beacon) p.transport_type = "beacon";
+        window.gtag("event", name, p);
+      } catch (err) {}
+    }
+  };
+})();
+</script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1d23;
+    --muted: #8b93a1;
+    --line: #e2e5ea;
+    --mark: #3d6ae0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171c;
+      --fg: #e6e8ec;
+      --muted: #767e8c;
+      --line: #2a2e36;
+      --mark: #7fa0ff;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 18vh 24px 40px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  .wrap { max-width: 320px; margin: 0 auto; }
+
+  ol {
+    list-style: none;
+    margin: 0 0 44px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  li { display: flex; align-items: baseline; gap: 12px; }
+
+  .marker {
+    width: 14px;
+    flex: none;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--mark);
+    text-align: center;
+  }
+  li.done .marker { color: var(--muted); }
+
+  a {
+    flex: 1;
+    display: block;
+    padding: 9px 10px;
+    margin-left: -10px;
+    border-radius: 5px;
+    color: var(--fg);
+    font-size: 17px;
+    line-height: 1.4;
+    text-decoration: none;
+  }
+  a:focus { outline: none; }
+  li.current a { background: var(--line); }
+  li.done a { color: var(--muted); }
+
+  /* ---- 하단 안내 = 키캡 ---- */
+  .hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .cap {
+    display: inline-block;
+    padding: 4px 9px;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.3;
+    user-select: none;
+  }
+  .cap.pressed {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+    border-bottom-width: 1px;
+    transform: translateY(1px);
+  }
+  .cap[hidden], .plus[hidden] { display: none; }
+  .plus { font-size: 12px; color: var(--muted); }
+
+  @keyframes cap-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    50% { transform: translateX(4px); }
+    75% { transform: translateX(-2px); }
+  }
+  .cap.shake { animation: cap-shake 0.25s ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .cap.shake { animation: none; border-color: var(--mark); color: var(--mark); }
+  }
+
+  /* ---- 불러오기 상태 ---- */
+  .status { margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted); }
+  .status a { display: inline; padding: 0; margin: 0; color: var(--mark); font-size: inherit; text-decoration: underline; }
+  [hidden] { display: none !important; }
+
+  /* ---- 목록 편집 ---- */
+  .quiet {
+    margin-top: 28px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .quiet:hover { color: var(--fg); }
+
+  .wrap.editing { max-width: 520px; }
+
+  .editor h1 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
+  .editor .sub { margin: 0 0 20px; font-size: 13px; color: var(--muted); }
+
+  .editor input {
+    min-width: 0;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    font-size: 14px;
+  }
+
+  .editor button, .editor .btn {
+    padding: 7px 12px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .editor button.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+  .editor button:disabled { opacity: 0.45; cursor: default; }
+  .editor input:focus-visible, .editor button:focus-visible, .quiet:focus-visible {
+    outline: 2px solid var(--mark);
+    outline-offset: 1px;
+  }
+
+  .pin-row { display: flex; gap: 8px; }
+  .pin-row input { width: 10em; letter-spacing: 0.15em; }
+
+  .rows { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  @media (max-width: 560px) { .rows { gap: 18px; } .row .name { flex-basis: 100%; } }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .row .name { flex: 0 1 9em; }
+  .row .url { flex: 1 1 14em; }
+  .row .ctrl { display: flex; gap: 4px; }
+  .row .ctrl button { padding: 7px 9px; }
+
+  .actions { display: flex; gap: 8px; margin-top: 20px; }
+  .msg { min-height: 1.5em; margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+  .msg.error { color: #c2413a; }
+  @media (prefers-color-scheme: dark) { .msg.error { color: #ff8a80; } }
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <p class="status" id="status" hidden></p>
+
+  <div id="launcher" hidden>
+    <ol id="apps"></ol>
+    <div class="hint">
+      <span class="cap" id="cap-mod">Ctrl</span>
+      <span class="plus" id="plus">+</span>
+      <span class="cap" id="cap-enter">Enter</span>
+      <span id="hint-text">로 계속</span>
+    </div>
+    <button type="button" class="quiet" id="edit-open">목록 편집</button>
+  </div>
+
+  <section class="editor" id="editor" hidden>
+    <form id="pin-form" autocomplete="off">
+      <h1>목록 편집</h1>
+      <p class="sub">이 주소를 발급받을 때 정한 PIN을 입력하세요.</p>
+      <div class="pin-row">
+        <input id="pin" type="password" inputmode="numeric" maxlength="12" aria-label="PIN" required>
+        <button type="submit" class="primary" id="pin-submit">확인</button>
+        <button type="button" data-cancel>취소</button>
+      </div>
+      <p class="msg" id="pin-msg" role="status"></p>
+    </form>
+
+    <div id="edit-form" hidden>
+      <h1>목록 편집</h1>
+      <p class="sub">위에서부터 순서대로 열려요. 마지막 앱은 현재 탭에서 열려요.</p>
+      <ol class="rows" id="rows"></ol>
+      <button type="button" id="add-row">앱 추가</button>
+      <div class="actions">
+        <button type="button" class="primary" id="save">저장</button>
+        <button type="button" data-cancel>취소</button>
+      </div>
+      <p class="msg" id="edit-msg" role="status"></p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 주소에서 slug 읽기: workset.my/{slug} ---------- */
+
+  var SLUG = (location.pathname.split("/").filter(Boolean)[0] || "").toLowerCase();
+  var API = "/api/sets/" + encodeURIComponent(SLUG);
+  var CACHE_KEY = "workset-apps:" + SLUG;       // 같은 세션 안에서 재방문 시 즉시 그리기용
+  var STORE_KEY = "workset-progress:" + SLUG;
+  var LOAD_TIMEOUT_MS = 8000;
+  var MAX_APPS = 12;
+
+  var IS_MAC = /Mac|iPod|iPhone|iPad/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent);
+  var MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
+
+  var wrapEl = document.getElementById("wrap");
+  var statusEl = document.getElementById("status");
+  var launcherEl = document.getElementById("launcher");
+  var editorEl = document.getElementById("editor");
+
+  // 편집 중에는 런처의 키 처리·포커스 되돌리기를 멈춘다.
+  var paused = false;
+  var currentApps = [];
+
+  /* ---------- 공통 ---------- */
+
+  function track(name, props, beacon) {
+    try { if (window.wsTrack) window.wsTrack(name, props, beacon); } catch (err) {}
+  }
+
+  function ssGet(key) { try { return sessionStorage.getItem(key); } catch (err) { return null; } }
+  function ssSet(key, val) { try { sessionStorage.setItem(key, val); } catch (err) {} }
+  function ssDel(key) { try { sessionStorage.removeItem(key); } catch (err) {} }
+
+  function showStatus(html) {
+    statusEl.innerHTML = html;
+    statusEl.hidden = false;
+  }
+
+  function appsSignature(apps) {
+    return apps.map(function (a) { return a.url; }).join("\n");
+  }
+
+  /* ---------- 목록 불러오기 ---------- */
+
+  function load() {
+    if (!SLUG) { location.replace("/"); return; }
+
+    var cached = ssGet(CACHE_KEY);
+    if (cached) {
+      try {
+        var apps = JSON.parse(cached);
+        if (Array.isArray(apps) && apps.length) { boot(apps); return; }
+      } catch (err) {}
+    }
+
+    // 빠르면 아무것도 안 보이다가 바로 목록이 뜨고, 느릴 때만 안내가 보인다.
+    var slowTimer = setTimeout(function () { showStatus("목록을 불러오는 중…"); }, 400);
+    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    var killTimer = setTimeout(function () { if (ctrl) ctrl.abort(); }, LOAD_TIMEOUT_MS);
+
+    fetch(API, { cache: "no-store", signal: ctrl ? ctrl.signal : undefined })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) { return { res: res, body: body }; });
+      })
+      .then(function (r) {
+        clearTimeout(slowTimer); clearTimeout(killTimer);
+        if (r.res.status === 404) {
+          showStatus("<strong>workset.my/" + escapeHtml(SLUG) + "</strong>로 발급된 목록이 없어요. " +
+            "주소를 다시 확인하거나 <a href=\"/\">새 주소를 신청</a>하세요.");
+          return;
+        }
+        if (!r.res.ok || !Array.isArray(r.body.apps) || !r.body.apps.length) throw new Error("bad response");
+        ssSet(CACHE_KEY, JSON.stringify(r.body.apps));
+        statusEl.hidden = true;
+        boot(r.body.apps);
+      })
+      .catch(function () {
+        clearTimeout(slowTimer); clearTimeout(killTimer);
+        showStatus("목록을 불러오지 못했어요. <a href=\"\" id=\"retry\">다시 시도</a>");
+        var retry = document.getElementById("retry");
+        if (retry) retry.addEventListener("click", function (e) { e.preventDefault(); statusEl.hidden = true; load(); });
+      });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  /* ---------- 런처 ---------- */
+
+  function boot(APPS) {
+    currentApps = APPS;
+    launcherEl.hidden = false;
+
+    var LAST = APPS.length - 1;
+    var SIG = appsSignature(APPS);
+
+    var listEl = document.getElementById("apps");
+    var capMod = document.getElementById("cap-mod");
+    var capEnter = document.getElementById("cap-enter");
+    var plusEl = document.getElementById("plus");
+    var hintText = document.getElementById("hint-text");
+
+    var links = [];
+    var done = APPS.map(function () { return false; });
+    var current = 0;
+    var resumed = false;             // sessionStorage에서 진행 상태를 복원해 이어서 시작했는지
+    var startedAt = Date.now();
+
+    // 키보드로 활성화된 click은 detail이 0이다. Ctrl/⌘ 동반 여부로 네 가지로 나눈다.
+    function openMethod(e) {
+      var mod = e.ctrlKey || e.metaKey;
+      if (e.detail === 0) return mod ? "mod_enter" : "enter";
+      return mod ? "mod_click" : "click";
+    }
+
+    capMod.textContent = MOD_LABEL;
+
+    /* 진행 상태 (sessionStorage — 저장 실패해도 동작에 영향 없음). 목록이 바뀌면 이전 진행은 버린다. */
+
+    function save() { ssSet(STORE_KEY, JSON.stringify({ sig: SIG, done: done })); }
+    function clearSaved() { ssDel(STORE_KEY); }
+
+    function restore() {
+      var raw = ssGet(STORE_KEY);
+      if (!raw) return;
+      var saved;
+      try { saved = JSON.parse(raw); } catch (err) { return; }
+      if (!saved || saved.sig !== SIG || !Array.isArray(saved.done) || saved.done.length !== APPS.length) return;
+
+      // 전부 연 상태로 돌아왔으면 새로 시작한다 — 다 채워진 화면은 할 일이 없다.
+      if (saved.done.every(Boolean)) { clearSaved(); return; }
+      done = saved.done.map(Boolean);
+      resumed = done.some(Boolean);
+    }
+
+    function reset() {
+      done = APPS.map(function () { return false; });
+      clearSaved();
+    }
+
+    /* 렌더 */
+
+    APPS.forEach(function (app, i) {
+      var li = document.createElement("li");
+
+      var marker = document.createElement("span");
+      marker.className = "marker";
+
+      var a = document.createElement("a");
+      a.href = app.url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = app.name;
+
+      a.addEventListener("click", function (e) {
+        var isLast = i === LAST;
+        track("launch_item_opened", {
+          position: i + 1,
+          total: APPS.length,
+          is_last: isLast,
+          method: openMethod(e),
+          app_name: app.name,
+          resumed: resumed
+        }, isLast);
+
+        if (isLast) {
+          // 배경 탭으로 열면 런처가 전경에 남는다. 현재 탭 이동은 팝업이 아니라 차단되지 않는다.
+          e.preventDefault();
+          done[i] = true;
+          save();
+          // 이동 직전이라 beacon으로 보낸다. 이동을 늦추지 않는다.
+          track("launch_sequence_finished", {
+            total: APPS.length,
+            opened_count: done.filter(Boolean).length,
+            all_opened: done.every(Boolean),
+            elapsed_ms: Date.now() - startedAt,
+            resumed: resumed
+          }, true);
+          location.href = app.url;
+          return;
+        }
+        // 마지막이 아닌 항목은 네이티브 동작(배경 탭)을 그대로 통과시킨다 — preventDefault 금지.
+        done[i] = true;
+        save();
+        focusLink(nextPending(i + 1));
+      });
+
+      a.addEventListener("focus", function () { current = i; render(); });
+
+      li.appendChild(marker);
+      li.appendChild(a);
+      listEl.appendChild(li);
+      links.push(a);
+    });
+
+    function render() {
+      links.forEach(function (a, i) {
+        var li = a.parentNode;
+        var isCurrent = i === current;
+        li.classList.toggle("done", done[i]);
+        li.classList.toggle("current", isCurrent && !done[i]);
+        li.querySelector(".marker").textContent = done[i] ? "✓" : (isCurrent ? "▶" : "");
+      });
+
+      // 마지막 항목 차례에는 키캡이 Enter 하나로 바뀐다 — 이 전환이 "이제 마지막"이라는 신호다.
+      var finishing = current === LAST;
+      capMod.hidden = finishing;
+      plusEl.hidden = finishing;
+      hintText.textContent = finishing ? "로 마무리" : "로 계속";
+    }
+
+    function nextPending(from) {
+      var i;
+      for (i = from; i < APPS.length; i++) { if (!done[i]) return i; }
+      for (i = 0; i < APPS.length; i++) { if (!done[i]) return i; }
+      return LAST;
+    }
+
+    function focusLink(i) {
+      if (links[i]) links[i].focus();
+    }
+
+    /* 키 입력 */
+
+    function setPressed(cap, on) { cap.classList.toggle("pressed", on); }
+
+    function shakeMod() {
+      capMod.classList.remove("shake");
+      void capMod.offsetWidth; // 애니메이션 재시작용 리플로
+      capMod.classList.add("shake");
+      setTimeout(function () { capMod.classList.remove("shake"); }, 300);
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (paused) return;
+      // D2. IME 가드 — 한글 조합 중에는 Enter를 IME가 확정용으로 가져간다.
+      if (e.isComposing || e.keyCode === 229) return;
+      // D1. 키 리피트 가드 — 누르고 있는 동안 반복 발생하는 keydown을 무시한다.
+      if (e.repeat) return;
+
+      if (e.key === "Control" || e.key === "Meta") { setPressed(capMod, true); return; }
+      if (e.key !== "Enter") return;
+
+      setPressed(capEnter, true);
+
+      // Ctrl+Enter에는 절대 preventDefault를 걸지 않는다 — 걸면 링크가 열리지 않는다.
+      if (e.ctrlKey || e.metaKey) return;
+
+      var ae = document.activeElement;
+      var idx = links.indexOf(ae);
+      if (idx === LAST) return; // 마지막 항목은 단독 Enter로 마무리한다
+
+      // 다른 컨트롤에 포커스가 있으면 그쪽 키보드 조작을 방해하지 않는다.
+      var onPage = !ae || ae === document.body || ae === document.documentElement;
+      if (idx === -1 && !onPage) return;
+
+      e.preventDefault();
+      shakeMod();
+      // 단독 Enter 차단 = 조작법을 아직 몸에 익히지 못했다는 신호 (MIN-58 "학습 완료" 기준 보조 지표).
+      track("bare_enter_blocked", { position: current + 1, total: APPS.length });
+    }, false);
+
+    document.addEventListener("keyup", function (e) {
+      if (e.key === "Control" || e.key === "Meta") setPressed(capMod, false);
+      if (e.key === "Enter") setPressed(capEnter, false);
+    }, false);
+
+    /* 포커스 유지 — 링크에서 포커스가 빠지면 Ctrl+Enter가 먹통이 된다. 항상 현재 항목으로 되돌린다. */
+
+    document.addEventListener("focusout", function () {
+      if (paused) return;
+      setTimeout(function () {
+        if (paused) return;
+        var ae = document.activeElement;
+        if (links.indexOf(ae) !== -1) return;
+        if (ae && ae !== document.body && ae !== document.documentElement) return;
+        if (!document.hasFocus()) return;
+        focusLink(current);
+      }, 0);
+    }, false);
+
+    window.addEventListener("blur", function () {
+      setPressed(capMod, false);
+      setPressed(capEnter, false);
+    }, false);
+
+    window.addEventListener("focus", function () {
+      if (paused) return;
+      if (links.indexOf(document.activeElement) === -1) focusLink(current);
+    }, false);
+
+    window.addEventListener("pagehide", save, false);
+
+    // 뒤로 가기로 되살아난 경우(bfcache)도 새로 연 것과 같게 맞춘다.
+    window.addEventListener("pageshow", function (e) {
+      if (!e.persisted || paused) return;
+      if (done.every(Boolean)) reset();
+      resumed = done.some(Boolean);
+      startedAt = Date.now();
+      start();
+    }, false);
+
+    function start() {
+      current = nextPending(0);
+      render();
+      focusLink(current);
+    }
+
+    restore();
+    start();
+  }
+
+  /* ---------- 목록 편집 ---------- */
+
+  var pinForm = document.getElementById("pin-form");
+  var pinInput = document.getElementById("pin");
+  var pinSubmit = document.getElementById("pin-submit");
+  var pinMsg = document.getElementById("pin-msg");
+  var editForm = document.getElementById("edit-form");
+  var rowsEl = document.getElementById("rows");
+  var addBtn = document.getElementById("add-row");
+  var saveBtn = document.getElementById("save");
+  var editMsg = document.getElementById("edit-msg");
+
+  var pin = "";
+  var draft = [];
+
+  function setMsg(el, text, isError) {
+    el.textContent = text || "";
+    el.classList.toggle("error", !!isError);
+  }
+
+  function describeError(status, body) {
+    if (status === 423) {
+      var min = Math.max(1, Math.ceil((body.retryAfterSec || 600) / 60));
+      return "PIN을 여러 번 틀려 잠겼어요. " + min + "분 뒤에 다시 시도하세요.";
+    }
+    if (status === 401 && typeof body.remaining === "number") {
+      return "PIN이 맞지 않아요. " + body.remaining + "번 더 틀리면 10분간 잠겨요.";
+    }
+    return body.error || "요청을 처리하지 못했어요. 잠시 후 다시 시도하세요.";
+  }
+
+  function send(method, url, payload) {
+    return fetch(url, {
+      method: method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store"
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        return { ok: res.ok, status: res.status, body: body };
+      });
+    });
+  }
+
+  function openEditor() {
+    paused = true;
+    launcherEl.hidden = true;
+    editorEl.hidden = false;
+    wrapEl.classList.add("editing");
+    pinForm.hidden = false;
+    editForm.hidden = true;
+    pinInput.value = "";
+    setMsg(pinMsg, "");
+    pinInput.focus();
+  }
+
+  function closeEditor() {
+    pin = "";
+    editorEl.hidden = true;
+    wrapEl.classList.remove("editing");
+    launcherEl.hidden = false;
+    paused = false;
+    var first = document.querySelector("#apps li.current a") || document.querySelector("#apps a");
+    if (first) first.focus();
+  }
+
+  document.getElementById("edit-open").addEventListener("click", openEditor);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cancel]"), function (btn) {
+    btn.addEventListener("click", closeEditor);
+  });
+  editorEl.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeEditor();
+  });
+
+  pinForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var value = pinInput.value.trim();
+    if (!value) return;
+    pinSubmit.disabled = true;
+    setMsg(pinMsg, "확인하는 중…");
+    send("POST", API + "/auth", { pin: value })
+      .then(function (r) {
+        if (!r.ok) { setMsg(pinMsg, describeError(r.status, r.body), true); pinInput.select(); return; }
+        pin = value;
+        draft = currentApps.map(function (a) { return { name: a.name, url: a.url }; });
+        pinForm.hidden = true;
+        editForm.hidden = false;
+        setMsg(editMsg, "");
+        renderRows(0);
+      })
+      .catch(function () { setMsg(pinMsg, "연결에 실패했어요. 다시 시도하세요.", true); })
+      .then(function () { pinSubmit.disabled = false; });
+  });
+
+  function smallButton(label, aria, onClick, disabled) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.setAttribute("aria-label", aria);
+    b.disabled = !!disabled;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  // focusIndex: 다시 그린 뒤 이름 칸에 포커스를 줄 행 (없으면 null)
+  function renderRows(focusIndex) {
+    rowsEl.textContent = "";
+    draft.forEach(function (item, i) {
+      var li = document.createElement("li");
+      li.className = "row";
+
+      var name = document.createElement("input");
+      name.className = "name";
+      name.placeholder = "이름";
+      name.maxLength = 40;
+      name.value = item.name;
+      name.setAttribute("aria-label", (i + 1) + "번째 앱 이름");
+      name.addEventListener("input", function () { item.name = name.value; });
+
+      var url = document.createElement("input");
+      url.className = "url";
+      url.type = "url";
+      url.placeholder = "https://";
+      url.value = item.url;
+      url.setAttribute("aria-label", (i + 1) + "번째 앱 주소");
+      url.addEventListener("input", function () { item.url = url.value; });
+      // 스킴 없이 입력하면 https://를 붙여준다 (예: posthog.com)
+      url.addEventListener("blur", function () {
+        var v = url.value.trim();
+        if (v && !/^[a-z][a-z0-9+.-]*:/i.test(v)) { url.value = "https://" + v; item.url = url.value; }
+      });
+
+      var ctrl = document.createElement("div");
+      ctrl.className = "ctrl";
+      ctrl.appendChild(smallButton("↑", (i + 1) + "번째 앱을 위로", function () { move(i, -1); }, i === 0));
+      ctrl.appendChild(smallButton("↓", (i + 1) + "번째 앱을 아래로", function () { move(i, 1); }, i === draft.length - 1));
+      ctrl.appendChild(smallButton("삭제", (i + 1) + "번째 앱 삭제", function () { remove(i); }, draft.length <= 1));
+
+      li.appendChild(name);
+      li.appendChild(url);
+      li.appendChild(ctrl);
+      rowsEl.appendChild(li);
+    });
+    addBtn.disabled = draft.length >= MAX_APPS;
+    if (focusIndex !== null && focusIndex !== undefined) {
+      var target = rowsEl.children[focusIndex];
+      if (target) target.querySelector(".name").focus();
+    }
+  }
+
+  function move(i, dir) {
+    var j = i + dir;
+    if (j < 0 || j >= draft.length) return;
+    var tmp = draft[i]; draft[i] = draft[j]; draft[j] = tmp;
+    renderRows(null);
+    // 움직인 항목의 같은 버튼에 포커스를 이어준다 — 키보드로 연속 이동할 수 있게.
+    var row = rowsEl.children[j];
+    if (row) {
+      var btn = row.querySelectorAll(".ctrl button")[dir < 0 ? 0 : 1];
+      if (btn && !btn.disabled) btn.focus(); else row.querySelector(".name").focus();
+    }
+  }
+
+  function remove(i) {
+    if (draft.length <= 1) return;
+    draft.splice(i, 1);
+    renderRows(Math.min(i, draft.length - 1));
+  }
+
+  addBtn.addEventListener("click", function () {
+    if (draft.length >= MAX_APPS) return;
+    draft.push({ name: "", url: "" });
+    renderRows(draft.length - 1);
+  });
+
+  saveBtn.addEventListener("click", function () {
+    // 이름·주소가 둘 다 빈 행은 조용히 뺀다. 나머지 검증은 서버가 한다.
+    var apps = draft
+      .map(function (a) { return { name: a.name.trim(), url: a.url.trim() }; })
+      .filter(function (a) { return a.name || a.url; });
+    if (!apps.length) { setMsg(editMsg, "앱을 1개 이상 넣어주세요.", true); return; }
+
+    saveBtn.disabled = true;
+    setMsg(editMsg, "저장하는 중…");
+    send("PUT", API, { pin: pin, apps: apps })
+      .then(function (r) {
+        if (!r.ok) { setMsg(editMsg, describeError(r.status, r.body), true); return; }
+        track("set_saved", { total: r.body.apps.length });
+        ssSet(CACHE_KEY, JSON.stringify(r.body.apps));
+        ssDel(STORE_KEY);
+        setMsg(editMsg, "저장했어요.");
+        location.reload();
+      })
+      .catch(function () { setMsg(editMsg, "연결에 실패했어요. 다시 시도하세요.", true); })
+      .then(function () { saveBtn.disabled = false; });
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

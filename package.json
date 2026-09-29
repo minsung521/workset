@@ -1,0 +1,9 @@
+{
+  "name": "workset",
+  "private": true,
+  "description": "Netlify Functions 의존성 전용. 프론트엔드(public/)는 빌드·의존성 없음.",
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.1"
+  }
+}

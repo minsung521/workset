@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Workset 관리</title>
+<!-- 관리 페이지에는 analytics를 싣지 않는다. -->
+<style>
+  :root { --bg: #ffffff; --fg: #1a1d23; --muted: #8b93a1; --line: #e2e5ea; --mark: #3d6ae0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171c; --fg: #e6e8ec; --muted: #767e8c; --line: #2a2e36; --mark: #7fa0ff; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 10vh 24px 64px;
+    background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.6;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  h1 { margin: 0 0 6px; font-size: 18px; font-weight: 600; }
+  p { margin: 0 0 20px; color: var(--muted); }
+  form { display: flex; flex-direction: column; gap: 14px; }
+  label { display: flex; flex-direction: column; gap: 5px; }
+  fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: 16px; }
+  fieldset label { flex-direction: row; align-items: center; gap: 6px; }
+  input, textarea {
+    padding: 7px 9px; border: 1px solid var(--line); border-radius: 5px;
+    background: var(--bg); color: var(--fg); font: inherit;
+  }
+  textarea { min-height: 110px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .note { font-size: 12px; color: var(--muted); }
+  button {
+    align-self: flex-start; padding: 8px 16px; border: 1px solid var(--fg); border-radius: 5px;
+    background: var(--fg); color: var(--bg); font: inherit; cursor: pointer;
+  }
+  button:disabled { opacity: 0.45; }
+  input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--mark); outline-offset: 1px; }
+  .msg { min-height: 1.5em; margin: 0; }
+  .msg.error { color: #c2413a; }
+  @media (prefers-color-scheme: dark) { .msg.error { color: #ff8a80; } }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>주소 발급</h1>
+  <p>신청 목록은 Netlify의 Forms 메뉴에서 확인해요.</p>
+
+  <form id="admin-form" autocomplete="off">
+    <label>관리자 키
+      <input name="key" type="password" required>
+    </label>
+
+    <fieldset>
+      <label><input type="radio" name="action" value="create" checked> 새 주소 발급</label>
+      <label><input type="radio" name="action" value="reset-pin"> PIN 재설정</label>
+    </fieldset>
+
+    <label>주소
+      <input name="slug" required autocapitalize="none" spellcheck="false" placeholder="minsung">
+    </label>
+
+    <label>PIN (숫자 6~12자리)
+      <input name="pin" required inputmode="numeric" pattern="\d{6,12}">
+    </label>
+
+    <label id="apps-field">앱 목록
+      <textarea name="apps">Claude | https://claude.ai
+ChatGPT | https://chatgpt.com
+Linear | https://linear.app</textarea>
+      <span class="note">한 줄에 하나씩 "이름 | 주소". 발급받은 사람이 나중에 직접 고칠 수 있어요.</span>
+    </label>
+
+    <button type="submit" id="run">실행</button>
+    <p class="msg" id="msg" role="status"></p>
+  </form>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var form = document.getElementById("admin-form");
+  var run = document.getElementById("run");
+  var msg = document.getElementById("msg");
+  var appsField = document.getElementById("apps-field");
+
+  function setMsg(text, isError) {
+    msg.textContent = text || "";
+    msg.classList.toggle("error", !!isError);
+  }
+
+  function action() { return form.elements.action.value; }
+
+  Array.prototype.forEach.call(form.elements.action, function (radio) {
+    radio.addEventListener("change", function () { appsField.hidden = action() !== "create"; });
+  });
+
+  function parseApps(text) {
+    return text.split("\n")
+      .map(function (line) { return line.trim(); })
+      .filter(Boolean)
+      .map(function (line) {
+        var i = line.indexOf("|");
+        if (i === -1) return { name: "", url: line };
+        return { name: line.slice(0, i).trim(), url: line.slice(i + 1).trim() };
+      });
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+
+    var slug = form.elements.slug.value.trim().toLowerCase();
+    var payload = { action: action(), slug: slug, pin: form.elements.pin.value.trim() };
+    if (payload.action === "create") payload.apps = parseApps(form.elements.apps.value);
+
+    run.disabled = true;
+    setMsg("처리하는 중…");
+    fetch("/api/admin/sets", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-key": form.elements.key.value },
+      body: JSON.stringify(payload),
+      cache: "no-store"
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok) throw new Error(body.error || ("요청 실패 (" + res.status + ")"));
+          var url = location.origin + "/" + slug;
+          setMsg(payload.action === "create" ? "발급했어요: " + url : "PIN을 바꿨어요: " + url);
+          form.elements.pin.value = "";
+        });
+      })
+      .catch(function (err) { setMsg(err.message || "요청을 처리하지 못했어요.", true); })
+      .then(function () { run.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>
