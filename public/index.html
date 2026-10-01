@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Workset</title>
-<meta name="description" content="초기화되는 공용 PC에서도 주소 하나로 쓰던 웹앱들을 순서대로 다시 엽니다.">
+<meta name="description" content="초기화되는 공용 PC에서 주소 하나로 쓰던 웹앱을 순서대로 다시 엽니다.">
 <!-- ---- analytics (GA4 + PostHog) ----
      운영 도메인(workset.my)에서만 로드한다. localhost·file://·Netlify 미리보기에서는 아무것도 로드하지 않는다.
      키가 비어 있거나 로드에 실패해도 런처 동작에는 영향이 없어야 한다 (모든 호출은 try/catch). -->
@@ -72,8 +72,10 @@
   :root {
     --bg: #ffffff;
     --fg: #1a1d23;
-    --muted: #8b93a1;
+    --sub: #555d6b;     /* 본문 보조 문장 (대비 6:1 이상) */
+    --muted: #6b7380;   /* 작은 안내 문구 */
     --line: #e2e5ea;
+    --hl: #eceff4;
     --mark: #3d6ae0;
   }
 
@@ -81,117 +83,177 @@
     :root {
       --bg: #15171c;
       --fg: #e6e8ec;
-      --muted: #767e8c;
+      --sub: #a7afbc;
+      --muted: #8a92a0;
       --line: #2a2e36;
+      --hl: #23272f;
       --mark: #7fa0ff;
     }
   }
 
   * { box-sizing: border-box; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 
   body {
     margin: 0;
-    min-height: 100vh;
-    padding: 14vh 24px 64px;
+    padding: clamp(40px, 10vh, 96px) 24px 80px;
     background: var(--bg);
     color: var(--fg);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-size: 15px;
-    line-height: 1.65;
+    font-size: 16px;
+    line-height: 1.7;
+    word-break: keep-all;        /* 한글은 단어(띄어쓰기) 단위로만 줄바꿈 */
+    overflow-wrap: break-word;   /* 긴 영문·주소는 넘치지 않게 */
   }
 
-  .wrap { max-width: 480px; margin: 0 auto; }
+  .wrap { max-width: 520px; margin: 0 auto; }
 
-  h1 { margin: 0 0 10px; font-size: 22px; font-weight: 600; line-height: 1.35; }
-  h2 { margin: 48px 0 12px; font-size: 16px; font-weight: 600; }
+  h1 { margin: 0 0 14px; font-size: 28px; font-weight: 700; line-height: 1.3; text-wrap: balance; }
+  h2 { margin: 64px 0 14px; font-size: 18px; font-weight: 600; line-height: 1.4; }
   p { margin: 0 0 12px; }
-  .muted { color: var(--muted); }
+  .lead { font-size: 17px; color: var(--sub); }
+  .sub { color: var(--sub); }
   a { color: var(--mark); }
 
   .cap {
     display: inline-block;
-    padding: 1px 7px;
+    padding: 0 7px;
     border: 1px solid var(--line);
     border-bottom-width: 2px;
     border-radius: 5px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: 0.8em;
+    line-height: 1.6;
     white-space: nowrap;
-  }
-
-  ul.steps { margin: 0 0 12px; padding-left: 1.2em; }
-  ul.steps li { margin-bottom: 6px; }
-
-  form { display: flex; flex-direction: column; gap: 16px; }
-  label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
-  .field-note { font-size: 12px; color: var(--muted); }
-
-  input, textarea {
-    padding: 8px 10px;
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    background: var(--bg);
     color: var(--fg);
-    font: inherit;
-    font-size: 14px;
   }
-  textarea { min-height: 84px; resize: vertical; }
 
-  .slug-field { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
-  .slug-field span { padding: 8px 0 8px 10px; color: var(--muted); font-size: 14px; }
-  .slug-field input { flex: 1; min-width: 0; border: 0; padding-left: 1px; }
-
-  .consent { flex-direction: row; align-items: flex-start; gap: 8px; }
-  .consent input { margin-top: 5px; }
-
-  button {
-    align-self: flex-start;
-    padding: 9px 16px;
+  .btn, button {
+    display: inline-block;
+    padding: 10px 18px;
     border: 1px solid var(--fg);
-    border-radius: 5px;
+    border-radius: 6px;
     background: var(--fg);
     color: var(--bg);
     font: inherit;
-    font-size: 14px;
+    font-size: 15px;
+    line-height: 1.4;
+    text-decoration: none;
     cursor: pointer;
   }
   button:disabled { opacity: 0.45; cursor: default; }
 
-  input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
-    outline: 2px solid var(--mark);
-    outline-offset: 1px;
+  /* ---- 첫 화면 ---- */
+  .hero .btn { margin-top: 24px; }
+
+  .preview {
+    margin: 32px 0 0;
+    padding: 20px 20px 18px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
   }
-  .slug-field:focus-within { outline: 2px solid var(--mark); outline-offset: 1px; }
+  .preview .url { margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+  .preview ol { list-style: none; margin: 0 0 14px; padding: 0; }
+  .preview li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px 6px 8px;
+    border-radius: 6px;
+    font-size: 16px;
+  }
+  .preview li.cur { background: var(--hl); }
+  .preview .mk { width: 1em; color: var(--mark); font-size: 12px; text-align: center; }
+  .preview .hint { padding-left: 8px; font-size: 14px; color: var(--sub); }
+
+  /* ---- 쓰는 법 ---- */
+  ol.steps { margin: 0 0 14px; padding-left: 1.4em; }
+  ol.steps li { margin-bottom: 8px; padding-left: 4px; }
+  ol.steps li::marker { color: var(--muted); font-weight: 600; }
+  .note { font-size: 14px; color: var(--muted); }
+
+  /* ---- 신청폼 ---- */
+  form { display: flex; flex-direction: column; gap: 18px; margin-top: 20px; }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 15px; font-weight: 500; }
+  .field-note { font-size: 13px; font-weight: 400; color: var(--muted); }
+
+  input, textarea {
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 400;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  ::placeholder { color: var(--muted); opacity: 0.8; }
+
+  .slug-field { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .slug-field span { padding: 10px 0 10px 12px; color: var(--muted); font-weight: 400; }
+  .slug-field input { flex: 1; min-width: 0; border: 0; padding-left: 1px; }
+
+  .consent { flex-direction: row; align-items: flex-start; gap: 10px; font-weight: 400; }
+  .consent input { margin-top: 6px; }
+
+  form button { align-self: flex-start; }
+
+  input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--mark);
+    outline-offset: 2px;
+  }
+  .slug-field:focus-within { outline: 2px solid var(--mark); outline-offset: 2px; }
   .slug-field input:focus-visible { outline: none; }
 
-  .msg { min-height: 1.5em; margin: 0; font-size: 14px; }
+  .msg { min-height: 1.5em; margin: 0; font-size: 15px; }
   .msg.error { color: #c2413a; }
   @media (prefers-color-scheme: dark) { .msg.error { color: #ff8a80; } }
 
   .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
-  .privacy { font-size: 13px; color: var(--muted); }
-  .privacy dl { margin: 0; display: grid; grid-template-columns: 5.5em 1fr; gap: 4px 12px; }
-  .privacy dt { color: var(--fg); }
-  .privacy dd { margin: 0; }
+  /* ---- 개인정보 안내 (접힘) ---- */
+  details.privacy { margin-top: -6px; font-size: 14px; color: var(--sub); }
+  details.privacy summary { cursor: pointer; width: fit-content; color: var(--sub); text-decoration: underline; text-underline-offset: 3px; }
+  details.privacy dl { margin: 12px 0 0; display: grid; grid-template-columns: 5em 1fr; gap: 8px 12px; }
+  details.privacy dt { color: var(--fg); font-weight: 500; }
+  details.privacy dd { margin: 0; }
+  @media (max-width: 480px) {
+    h1 { font-size: 25px; }
+    details.privacy dl { grid-template-columns: 1fr; gap: 2px; }
+    details.privacy dd { margin-bottom: 8px; }
+  }
 </style>
 </head>
 <body>
 <main class="wrap">
-  <h1>초기화되는 PC에서도, 주소 하나로 하던 일을 다시 시작하세요</h1>
-  <p class="muted">설치도 저장도 필요 없어요. 자주 쓰는 웹앱 목록을 내 주소에 담아두고, 어느 PC에서든 그 주소만 열면 됩니다.</p>
+  <header class="hero">
+    <h1>초기화되는 PC에서도, 주소 하나로 다시 시작</h1>
+    <p class="lead">자주 쓰는 웹앱을 <span class="cap">Ctrl</span> + <span class="cap">Enter</span>로 순서대로 엽니다. 설치도, 저장도 필요 없어요.</p>
+
+    <div class="preview" aria-hidden="true">
+      <div class="url">workset.my/내주소</div>
+      <ol>
+        <li class="cur"><span class="mk">▶</span>Claude</li>
+        <li><span class="mk"></span>ChatGPT</li>
+        <li><span class="mk"></span>Linear</li>
+      </ol>
+      <div class="hint"><span class="cap">Ctrl</span> + <span class="cap">Enter</span> 로 계속</div>
+    </div>
+
+    <a class="btn" href="#apply" id="cta">내 주소 신청하기</a>
+  </header>
 
   <h2>쓰는 법</h2>
-  <ul class="steps">
-    <li><strong>workset.my/내주소</strong>를 열어요.</li>
-    <li><span class="cap">Ctrl</span> + <span class="cap">Enter</span>를 누를 때마다 앱이 하나씩 배경 탭으로 열려요.</li>
+  <ol class="steps">
+    <li><strong>workset.my/내주소</strong>를 엽니다.</li>
+    <li><span class="cap">Ctrl</span> + <span class="cap">Enter</span>를 누를 때마다 앱이 하나씩 새 탭에서 열려요.</li>
     <li>마지막 앱은 <span class="cap">Enter</span>로 현재 탭에서 열려요.</li>
-  </ul>
-  <p class="muted">각 서비스 로그인은 따로 해야 해요. Workset은 탭을 여는 과정만 줄여줘요.</p>
+  </ol>
+  <p class="note">각 서비스 로그인은 직접 해야 해요.</p>
 
-  <h2 id="apply">내 주소 신청하기</h2>
-  <p class="muted">신청을 확인한 뒤 주소를 발급하고, 목록을 편집할 때 쓰는 PIN을 이메일로 보내드려요.</p>
+  <h2 id="apply">내 주소 신청</h2>
+  <p class="sub">확인 후 주소와 PIN을 이메일로 보내드려요.</p>
 
   <form name="slug-request" method="POST" action="/?applied=1" data-netlify="true" netlify-honeypot="bot-field" id="apply-form">
     <input type="hidden" name="form-name" value="slug-request">
@@ -203,7 +265,7 @@
         <input name="slug" required minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9\-]{1,30}[a-z0-9]"
                autocapitalize="none" autocomplete="off" spellcheck="false" aria-describedby="slug-note">
       </span>
-      <span class="field-note" id="slug-note">소문자·숫자·하이픈 3~32자. 하이픈으로 시작하거나 끝날 수 없어요.</span>
+      <span class="field-note" id="slug-note">소문자·숫자·하이픈, 3~32자</span>
     </label>
 
     <label>이메일
@@ -211,28 +273,28 @@
     </label>
 
     <label>담고 싶은 앱 (선택)
-      <textarea name="apps" placeholder="예: Claude, Notion, Gmail"></textarea>
+      <textarea name="apps" placeholder="Claude, Notion, Gmail"></textarea>
     </label>
 
     <label class="consent">
       <input type="checkbox" name="consent" value="agree" required>
-      <span>아래 개인정보 수집·이용에 동의해요.</span>
+      <span>개인정보 수집·이용에 동의합니다.</span>
     </label>
+
+    <details class="privacy">
+      <summary>개인정보 안내</summary>
+      <dl>
+        <dt>수집 항목</dt><dd>신청 시 주소·이메일·담고 싶은 앱(선택). 발급 후 목록에 저장한 앱 이름과 주소.</dd>
+        <dt>이용 목적</dt><dd>주소 발급 안내, 목록 제공.</dd>
+        <dt>보관 기간</dt><dd>신청 정보는 안내 후 삭제(미발급 시 신청일로부터 90일). 목록은 삭제를 요청할 때까지.</dd>
+        <dt>사용 통계</dt><dd>Google Analytics와 PostHog로 방문과 런처 사용 기록(앱 이름·순서·조작 방식)을 수집하며, 쿠키를 사용해요.</dd>
+        <dt>삭제 요청</dt><dd>발급 안내 메일에 회신해 주세요.</dd>
+      </dl>
+    </details>
 
     <button type="submit" id="apply-submit">신청하기</button>
     <p class="msg" id="apply-msg" role="status"></p>
   </form>
-
-  <h2>개인정보 안내</h2>
-  <section class="privacy">
-    <dl>
-      <dt>수집 항목</dt><dd>신청 시: 원하는 주소, 이메일, 담고 싶은 앱(선택). 주소 발급 후: 내 주소에 저장한 앱 이름과 주소.</dd>
-      <dt>이용 목적</dt><dd>주소 발급 안내, 발급된 주소에서 목록 제공.</dd>
-      <dt>보관 기간</dt><dd>신청 정보는 발급 안내 후 바로, 발급하지 않은 경우 신청일로부터 90일 뒤 삭제해요. 앱 목록은 주소 삭제를 요청할 때까지 보관해요.</dd>
-      <dt>사용 통계</dt><dd>서비스 개선을 위해 Google Analytics와 PostHog로 방문과 런처 사용 기록(연 앱 이름, 순서, 조작 방식)을 수집하며, 이 과정에서 쿠키가 쓰여요.</dd>
-      <dt>문의·삭제</dt><dd>신청에 쓴 이메일로 발급 안내 메일에 회신하면 삭제해드려요.</dd>
-    </dl>
-  </section>
 </main>
 
 <script>
