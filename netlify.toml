@@ -1,0 +1,9 @@
+# 사이트 파일은 public/만 배포한다. 루트에는 package.json·node_modules가 있어 그대로 배포되면 안 된다.
+[build]
+  publish = "public"
+
+# workset.my/{slug} → 런처. 정적 파일(/, /admin, /archive/...)과 /api/* 함수가 먼저 처리되므로 겹치지 않는다.
+[[redirects]]
+  from = "/:slug"
+  to = "/launcher.html"
+  status = 200
