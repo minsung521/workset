@@ -31,7 +31,10 @@
         // 런치 이벤트는 아래에서 직접 보내므로 끄는 쪽이 중복도 없고 주소 유출 여지도 없다.
         autocapture: false,
         // 설문 팝업이 포커스를 가져가면 Ctrl+Enter가 먹통이 된다 — 런처에는 띄우지 않는다.
-        disable_surveys: true
+        disable_surveys: true,
+        // 세션 리플레이: 입력값(이메일·PIN·앱 주소)은 모두 가린다. 사용자 목록이 그려지는 영역은
+        // ph-no-capture 클래스로 녹화에서 통째로 뺀다 (링크 텍스트와 href 속성이 그대로 녹화되기 때문).
+        session_recording: { maskAllInputs: true }
       });
     } catch (err) { usePH = false; }
   }
@@ -218,6 +221,7 @@
   details.privacy dl { margin: 12px 0 0; display: grid; grid-template-columns: 5em 1fr; gap: 8px 12px; }
   details.privacy dt { color: var(--fg); font-weight: 500; }
   details.privacy dd { margin: 0; }
+  details.privacy .privacy-more { margin: 12px 0 0; }
   @media (max-width: 480px) {
     h1 { font-size: 25px; }
     details.privacy dl { grid-template-columns: 1fr; gap: 2px; }
@@ -287,9 +291,10 @@
         <dt>수집 항목</dt><dd>신청 시 주소·이메일·담고 싶은 앱(선택). 발급 후 목록에 저장한 앱 이름과 주소.</dd>
         <dt>이용 목적</dt><dd>주소 발급 안내, 목록 제공.</dd>
         <dt>보관 기간</dt><dd>신청 정보는 안내 후 삭제(미발급 시 신청일로부터 90일). 목록은 삭제를 요청할 때까지.</dd>
-        <dt>사용 통계</dt><dd>Google Analytics와 PostHog로 방문과 런처 사용 기록(앱 이름·순서·조작 방식)을 수집하며, 쿠키를 사용해요.</dd>
+        <dt>사용 통계</dt><dd>Google Analytics와 PostHog로 방문 기록, 런처 조작 방식, 세션 리플레이(입력값과 앱 목록은 가림)를 수집하며, 쿠키와 브라우저 저장소를 사용해요. 앱 이름과 주소는 보내지 않아요.</dd>
         <dt>삭제 요청</dt><dd>발급 안내 메일에 회신해 주세요.</dd>
       </dl>
+      <p class="privacy-more"><a href="/privacy">전체 안내 보기</a></p>
     </details>
 
     <button type="submit" id="apply-submit">신청하기</button>
